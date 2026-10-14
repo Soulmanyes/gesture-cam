@@ -1,7 +1,7 @@
 #!/bin/sh
 # One-time setup, run with sudo: installs the window's libraries, GStreamer's PipeWire plugin and
 # v4l2loopback, then creates the "Gesture Cam" virtual camera at /dev/video10, now and on every boot.
-# Works on Arch (and Arch-based distros), Debian 13+, Ubuntu 24.04+ and Fedora 40+.
+# Works on Arch (and Arch-based distros such as Manjaro and CachyOS), Debian 13+, Ubuntu 24.04+ and Fedora 40+.
 set -e
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -13,8 +13,15 @@ fi
 family="$ID $ID_LIKE"
 case "$family" in
     *arch*)
+        # DKMS builds the driver for each installed kernel and needs its headers, which Manjaro and
+        # some Arch installs leave out. Kernel package names vary (linux, linux-zen, linux612,
+        # linux-cachyos...), so ask pacman which package owns each kernel image.
+        headers=""
+        for kernel in $(pacman -Qqo /usr/lib/modules/*/vmlinuz 2>/dev/null); do
+            pacman -Si "$kernel-headers" >/dev/null 2>&1 && headers="$headers $kernel-headers"
+        done
         pacman -S --needed --noconfirm python-gobject gtk4 libadwaita gstreamer gst-plugins-base gst-plugin-pipewire \
-            v4l2loopback-dkms
+            $headers v4l2loopback-dkms
         ;;
     *debian*|*ubuntu*)
         apt-get update
