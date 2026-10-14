@@ -24,22 +24,28 @@ model recognises (the ones above plus ✊ fist), and five that Gesture Cam works
 
 ## Setup (once)
 
+Works on Arch (and Arch-based distros such as CachyOS, EndeavourOS, Manjaro), Debian 13+, Ubuntu 24.04+
+and Fedora 40+. Older releases have a libadwaita or GLib that's too old for the window.
+
 ```sh
-sudo ./setup-loopback.sh
+sudo ./setup.sh
 ```
 
-This installs `v4l2loopback-dkms` and creates the virtual camera `/dev/video10`,
-named "Gesture Cam". It also adds config so the camera comes back after every reboot.
+This installs the window's libraries (GTK 4, libadwaita, PyGObject) and v4l2loopback, then creates the
+virtual camera `/dev/video10`, named "Gesture Cam". It also adds config so the camera comes back after
+every reboot. On Fedora it enables the RPM Fusion (free) repository, which is where v4l2loopback comes from.
+
+With Secure Boot on, the driver is blocked until its signing key is enrolled. The script then prints the
+`mokutil --import` command to run; after a reboot, pick "Enroll MOK" on the blue screen, then run
+`sudo ./setup.sh` again.
 
 Then create the Python environment and add the app to your launcher:
 
 ```sh
 python3 -m venv --system-site-packages .venv   # system site-packages provides the GTK bindings
 .venv/bin/pip install -r requirements.txt
-cp gesture-cam.desktop ~/.local/share/applications/   # edit Exec= if the repo is not in ~/claude/gesture-cam
+sed "s#^Exec=.*#Exec=$PWD/gesture-cam#" gesture-cam.desktop > ~/.local/share/applications/gesture-cam.desktop
 ```
-
-The window needs `python-gobject`, `gtk4` and `libadwaita` from pacman.
 
 ## Use
 

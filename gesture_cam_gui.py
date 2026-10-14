@@ -7,10 +7,17 @@ import threading
 
 import gi
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-gi.require_version("GLibUnix", "2.0")
-from gi.repository import Adw, GLib, GLibUnix, Gtk  # noqa: E402
+TOO_OLD = ("Gesture Cam needs GTK 4, libadwaita 1.4 and GLib 2.80 or newer: "
+           "Arch, Debian 13, Ubuntu 24.04, Fedora 40 or later. Run sudo ./setup.sh first.")
+try:
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    gi.require_version("GLibUnix", "2.0")  # GLib 2.80+
+    from gi.repository import Adw, GLib, GLibUnix, Gtk  # noqa: E402
+except (ValueError, ImportError):
+    sys.exit(TOO_OLD)
+if (Adw.get_major_version(), Adw.get_minor_version()) < (1, 4):  # Adw.ToolbarView, Adw.SwitchRow
+    sys.exit(TOO_OLD)
 
 import gesture_cam as gc  # noqa: E402
 

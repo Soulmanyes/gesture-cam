@@ -517,7 +517,7 @@ class Engine:
 
     def _run(self):
         if not Path(OUTPUT).exists():
-            raise CameraError(f"Virtual camera {OUTPUT} not found. Run: sudo {HERE}/setup-loopback.sh")
+            raise CameraError(f"Virtual camera {OUTPUT} not found. Run: sudo {HERE}/setup.sh")
         cap = open_camera(self.settings["camera"])
         reader = LatestFrame(cap)
         try:
