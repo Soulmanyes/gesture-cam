@@ -1,5 +1,5 @@
 #!/bin/sh
-# Publishes the committed code as a download on https://everyday-home.duckdns.org/apps/gesture-cam/.
+# Publishes the committed code as a download on https://szekbal.duckdns.org/apps/gesture-cam/.
 # The page itself lives in the Everyday repo (deploy/apps/); this only uploads the archive and version.json.
 set -e
 cd "$(dirname "$(readlink -f "$0")")"

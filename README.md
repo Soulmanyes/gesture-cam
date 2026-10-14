@@ -87,5 +87,5 @@ pkill -USR2 -f 'python gesture_cam'   # confetti
 
 ## Publishing
 
-`./publish.sh` uploads the committed code as a download on https://everyday-home.duckdns.org/apps/gesture-cam/.
+`./publish.sh` uploads the committed code as a download on https://szekbal.duckdns.org/apps/gesture-cam/.
 The download page itself is in the Everyday repo, under `deploy/apps/`.
