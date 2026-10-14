@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Gesture Cam
+GenericName=Webcam Effects
+Comment=Webcam gesture effects for Discord
+Exec=gesture-cam
+Icon=camera-web
+Terminal=false
+Categories=AudioVideo;Video;
+Keywords=webcam;camera;discord;fireworks;gesture;
+StartupWMClass=local.gesturecam.GestureCam

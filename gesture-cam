@@ -1,0 +1,7 @@
+#!/bin/sh
+# Start Gesture Cam. Opens the window; with --headless, runs without one using the saved settings.
+cd "$(dirname "$(readlink -f "$0")")" || exit 1
+if [ "$1" = "--headless" ]; then
+    exec .venv/bin/python gesture_cam.py
+fi
+exec .venv/bin/python gesture_cam_gui.py "$@"
