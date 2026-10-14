@@ -2,7 +2,7 @@
 Type=Application
 Name=Gesture Cam
 GenericName=Webcam Effects
-Comment=Webcam gesture effects for Discord
+Comment=Webcam gesture effects for video calls and camera apps
 Exec=gesture-cam
 Icon=camera-web
 Terminal=false

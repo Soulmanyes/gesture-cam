@@ -1,6 +1,6 @@
 # Gesture Cam
 
-Webcam effects for Discord, triggered by hand gestures. The effects play behind you:
+Webcam effects for video calls and camera apps, triggered by hand gestures. The effects play behind you:
 the person in the frame is cut out with MediaPipe's selfie segmenter, so they never cover your face.
 
 | Default gesture (hold ~⅓ s) | Effect    |
@@ -50,7 +50,7 @@ sed "s#^Exec=.*#Exec=$PWD/gesture-cam#" gesture-cam.desktop > ~/.local/share/app
 
 ## Use
 
-1. Make sure Discord or Vesktop is not using your webcam. Turn your camera off there, or switch it away from the webcam.
+1. Make sure no other app (Discord, Vesktop, a camera app) is using your webcam. Turn your camera off there, or switch it away from the webcam.
    Gesture Cam needs the real webcam for itself.
 2. Open **Gesture Cam** from your app launcher. It turns the camera on straight away.
    Keep the window open while you use it: closing it turns the camera off.
