@@ -84,3 +84,8 @@ pkill -USR2 -f 'python gesture_cam'   # confetti
 - `models/`: MediaPipe models (`gesture_recognizer.task`, `selfie_segmenter.tflite`).
 - `.venv/`: the Python environment (mediapipe, opencv-contrib-python, numpy, pyvirtualcam).
   It also uses the system's GTK bindings (`python-gobject`).
+
+## Publishing
+
+`./publish.sh` uploads the committed code as a download on https://everyday-home.duckdns.org/apps/gesture-cam/.
+The download page itself is in the Everyday repo, under `deploy/apps/`.
