@@ -31,7 +31,8 @@ and Fedora 40+. Older releases have a libadwaita or GLib that's too old for the 
 sudo ./setup.sh
 ```
 
-This installs the window's libraries (GTK 4, libadwaita, PyGObject) and v4l2loopback, then creates the
+This installs the window's libraries (GTK 4, libadwaita, PyGObject), GStreamer's PipeWire plugin and
+v4l2loopback, then creates the
 virtual camera `/dev/video10`, named "Gesture Cam". It also adds config so the camera comes back after
 every reboot. On Fedora it enables the RPM Fusion (free) repository, which is where v4l2loopback comes from.
 
@@ -55,6 +56,10 @@ sed "s#^Exec=.*#Exec=$PWD/gesture-cam#" gesture-cam.desktop > ~/.local/share/app
    Keep the window open while you use it: closing it turns the camera off.
 3. In Discord or Vesktop, go to Settings > Voice & Video > Camera and pick **Gesture Cam**.
    It only shows up while Gesture Cam is on. Restart Discord the first time, so it sees the new device.
+
+Other camera apps (GNOME Snapshot, OBS's PipeWire camera source, browsers) find cameras through PipeWire
+instead. Gesture Cam offers the same picture there too, also named **Gesture Cam**, while it's on.
+Open the app after turning Gesture Cam on, or reopen it, so it lists the camera.
 
 ## Settings
 

@@ -16,7 +16,9 @@ Which gesture plays which effect, and how much, how often and how long, is set i
 (gesture_cam_gui.py) and saved to ~/.config/gesture-cam/settings.json.
 Running this file directly starts the camera without a window, using those settings.
 
-Pick "Gesture Cam" as the camera in Discord. Effects can also be forced with
+Pick "Gesture Cam" as the camera in Discord. The same picture also goes straight into PipeWire as a
+camera named "Gesture Cam", for apps that find cameras through PipeWire (GNOME Snapshot, OBS, browsers):
+they don't list the v4l2loopback device. Effects can also be forced with
 signals: SIGUSR1 = fireworks, SIGUSR2 = confetti (handy for hotkeys/testing).
 """
 
@@ -473,6 +475,52 @@ class LatestFrame(threading.Thread):
             return self.frame, self.seq
 
 
+class PipeWireCamera:
+    """Offers the output frames as a "Gesture Cam" camera in PipeWire.
+
+    v4l2loopback with exclusive_caps=1 (needed for Discord) only looks like a camera while something
+    writes to it, and WirePlumber decides once at boot, so PipeWire apps never list /dev/video10.
+    This is a second, PipeWire-native copy of the same picture. Without GStreamer's PipeWire plugin
+    it does nothing, and only /dev/video10 works.
+    """
+
+    def __init__(self, w, h):
+        self.src = self.pipeline = None
+        try:
+            import gi
+            gi.require_version("Gst", "1.0")
+            from gi.repository import Gst
+            Gst.init(None)
+            self.Gst = Gst
+            # Frames arrive as I420, converted by OpenCV in send(): GStreamer's videoconvert from BGR
+            # only manages a few frames a second at 720p, which froze the picture in Snapshot.
+            # leaky-type=downstream drops old frames instead of queueing them if PipeWire falls behind.
+            self.pipeline = Gst.parse_launch(
+                f"appsrc name=src is-live=true do-timestamp=true format=time leaky-type=downstream max-buffers=2 "
+                f"caps=video/x-raw,format=I420,width={w},height={h},framerate={FPS}/1 "
+                f'! pipewiresink mode=provide client-name="Gesture Cam" '
+                f'stream-properties="props,media.class=Video/Source,media.role=Camera"')
+        except Exception as e:  # missing typelib or plugin: carry on with the v4l2loopback camera only
+            print(f"PipeWire camera not available: {e}", file=sys.stderr)
+            self.pipeline = None
+            return
+        self.src = self.pipeline.get_by_name("src")
+        self.pipeline.set_state(Gst.State.PLAYING)
+
+    def send(self, frame):
+        if self.src is not None:
+            i420 = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV_I420)
+            self.src.emit("push-buffer", self.Gst.Buffer.new_wrapped(i420.tobytes()))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        if self.pipeline is not None:
+            self.pipeline.set_state(self.Gst.State.NULL)
+            self.pipeline = self.src = None
+
+
 class Engine:
     """Runs the camera pipeline in a thread. `settings` is read live every frame,
     so changes made in the GUI apply straight away."""
@@ -559,7 +607,8 @@ class Engine:
         t0 = time.monotonic()
         last_t = t0
 
-        with pyvirtualcam.Camera(w, h, FPS, device=OUTPUT, fmt=pyvirtualcam.PixelFormat.BGR) as vcam:
+        with pyvirtualcam.Camera(w, h, FPS, device=OUTPUT, fmt=pyvirtualcam.PixelFormat.BGR) as vcam, \
+                PipeWireCamera(w, h) as pwcam:
             self.on_status("running", f"Running ({w}x{h}). Pick \"Gesture Cam\" as your camera in Discord.")
             while not self._stop.is_set():
                 frame, seq = reader.next(seq)
@@ -647,6 +696,7 @@ class Engine:
                     out = frame
 
                 vcam.send(out)
+                pwcam.send(out)
 
 
 def main():

@@ -1,6 +1,6 @@
 #!/bin/sh
-# One-time setup, run with sudo: installs the window's libraries and v4l2loopback, then creates the
-# "Gesture Cam" virtual camera at /dev/video10, now and on every boot.
+# One-time setup, run with sudo: installs the window's libraries, GStreamer's PipeWire plugin and
+# v4l2loopback, then creates the "Gesture Cam" virtual camera at /dev/video10, now and on every boot.
 # Works on Arch (and Arch-based distros), Debian 13+, Ubuntu 24.04+ and Fedora 40+.
 set -e
 
@@ -13,11 +13,13 @@ fi
 family="$ID $ID_LIKE"
 case "$family" in
     *arch*)
-        pacman -S --needed --noconfirm python-gobject gtk4 libadwaita v4l2loopback-dkms
+        pacman -S --needed --noconfirm python-gobject gtk4 libadwaita gstreamer gst-plugins-base gst-plugin-pipewire \
+            v4l2loopback-dkms
         ;;
     *debian*|*ubuntu*)
         apt-get update
         apt-get install -y python3-venv python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 \
+            gir1.2-gstreamer-1.0 gstreamer1.0-plugins-base gstreamer1.0-pipewire \
             v4l2loopback-dkms "linux-headers-$(uname -r)"
         ;;
     *fedora*)
@@ -26,7 +28,8 @@ case "$family" in
             echo "Enabling the RPM Fusion (free) repository for v4l2loopback..."
             dnf install -y "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm"
         fi
-        dnf install -y python3-gobject gtk4 libadwaita akmod-v4l2loopback
+        dnf install -y python3-gobject gtk4 libadwaita gstreamer1 gstreamer1-plugins-base pipewire-gstreamer \
+            akmod-v4l2loopback
         # akmods builds the module in the background after install; build it now so modprobe finds it.
         akmods --force --kernels "$(uname -r)"
         ;;
