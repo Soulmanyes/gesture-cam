@@ -1,3 +1,4 @@
+# Installing (see README) writes the full path of the gesture-cam script into Exec.
 [Desktop Entry]
 Type=Application
 Name=Gesture Cam
