@@ -3,11 +3,24 @@
 Webcam effects for Discord, triggered by hand gestures. The effects play behind you:
 the person in the frame is cut out with MediaPipe's selfie segmenter, so they never cover your face.
 
-| Gesture (hold ~⅓ s) | Effect    |
-|---------------------|-----------|
-| 👍 thumbs up        | fireworks |
-| ✌️ peace sign        | confetti  |
-| 🤟 "I love you"     | hearts    |
+| Default gesture (hold ~⅓ s) | Effect    |
+|-----------------------------|-----------|
+| 👍 thumbs up                | fireworks |
+| ✌️ peace sign                | confetti  |
+| 🤟 "I love you"             | hearts    |
+| 👎 thumbs down              | rain      |
+| ☝️ pointing up               | balloons  |
+| ✋ open palm                 | snow      |
+| 👌 OK sign                  | sparkles  |
+| 🤙 shaka / call me          | bubbles   |
+| 🙌 both hands open          | lasers    |
+
+Each effect's gesture can be changed in the window. The choices are the seven gestures MediaPipe's
+model recognises (the ones above plus ✊ fist), and five that Gesture Cam works out itself:
+
+- 👍👍 two thumbs up, 👎👎 two thumbs down and 🙌 both hands open, from the model's result for each hand.
+- 👌 OK sign and 🤙 shaka, from the finger positions. These are rule-based, so they can be less
+  reliable than the model's own gestures.
 
 ## Setup (once)
 
@@ -41,7 +54,8 @@ The window needs `python-gobject`, `gtk4` and `libadwaita` from pacman.
 
 The window has a section for each effect:
 
-- **Enabled**: turns the gesture on or off.
+- **Enabled**: turns the effect on or off.
+- **Gesture**: which hand gesture plays it. Two effects can share a gesture, and then both play.
 - **Keep going while the gesture is held**: the effect plays for as long as you hold the gesture.
   When this is off, the effect plays for **Duration** seconds instead.
 - **Amount**: how many rockets, confetti pieces or hearts each burst has.

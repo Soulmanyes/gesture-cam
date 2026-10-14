@@ -34,7 +34,7 @@ def slider_row(title, subtitle, lo, hi, step, digits, value, on_change):
 
 class Window(Adw.ApplicationWindow):
     def __init__(self, app):
-        super().__init__(application=app, title="Gesture Cam", default_width=560, default_height=820)
+        super().__init__(application=app, title="Gesture Cam", default_width=600, default_height=820)
         self.settings = gc.load_settings()
         self.engine = gc.Engine(self.settings, on_status=self._status_from_thread)
         self._save_pending = False
@@ -67,26 +67,41 @@ class Window(Adw.ApplicationWindow):
         page.add(top)
 
         self.test_buttons = []
+        effects = Adw.PreferencesGroup(title="Effects",
+                                       description="Switch an effect on or off, and open it to change its settings.")
         for name, meta in gc.EFFECTS.items():
-            page.add(self._effect_group(name, meta))
+            effects.add(self._effect_row(name, meta))
+        page.add(effects)
 
         self.connect("close-request", self._on_close)
         self._set_power(True)  # start straight away; that's why the app was opened
 
     # ----- effect settings -------------------------------------------------
 
-    def _effect_group(self, name, meta):
+    def _effect_row(self, name, meta):
         cfg = self.settings["effects"][name]
-        group = Adw.PreferencesGroup(title=f"{meta['gesture']}  →  {name.capitalize()}")
+        gesture_ids = list(gc.GESTURES)
+        row = Adw.ExpanderRow(title=name.capitalize(), subtitle=gc.GESTURES[cfg["gesture"]],
+                              show_enable_switch=True, enable_expansion=cfg["enabled"])
+        row.connect("notify::enable-expansion",
+                    lambda r, _p: self._set(name, "enabled", r.get_enable_expansion()))
 
         test = Gtk.Button(label="Test", valign=Gtk.Align.CENTER, sensitive=False)
         test.add_css_class("flat")
         test.set_tooltip_text("Play it now, without the gesture")
         test.connect("clicked", lambda _b: self.engine.fire(name))
-        group.set_header_suffix(test)
+        row.add_suffix(test)
         self.test_buttons.append(test)
 
-        enabled = Adw.SwitchRow(title="Enabled", active=cfg["enabled"])
+        gesture = Adw.ComboRow(title="Gesture", model=Gtk.StringList.new(list(gc.GESTURES.values())),
+                               selected=gesture_ids.index(cfg["gesture"]))
+
+        def on_gesture(r, _p):
+            gid = gesture_ids[r.get_selected()]
+            self._set(name, "gesture", gid)
+            row.set_subtitle(gc.GESTURES[gid])
+
+        gesture.connect("notify::selected", on_gesture)
         held = Adw.SwitchRow(title="Keep going while the gesture is held",
                              subtitle="Off: plays for the duration below", active=cfg["while_held"])
         lo, hi = meta["amount_range"]
@@ -96,19 +111,12 @@ class Window(Adw.ApplicationWindow):
                           lambda v: self._set(name, "rate", v))
         duration = slider_row("Duration", "Seconds", *gc.DURATION_RANGE, 0.5, 1, cfg["duration"],
                               lambda v: self._set(name, "duration", v))
-
-        def refresh(*_):
-            on = enabled.get_active()
-            for row in (held, amount, rate):
-                row.set_sensitive(on)
-            duration.set_sensitive(on and not held.get_active())
-
-        enabled.connect("notify::active", lambda r, _p: (self._set(name, "enabled", r.get_active()), refresh()))
-        held.connect("notify::active", lambda r, _p: (self._set(name, "while_held", r.get_active()), refresh()))
-        refresh()
-        for row in (enabled, held, amount, rate, duration):
-            group.add(row)
-        return group
+        duration.set_sensitive(not cfg["while_held"])
+        held.connect("notify::active", lambda r, _p: (self._set(name, "while_held", r.get_active()),
+                                                      duration.set_sensitive(not r.get_active())))
+        for child in (gesture, held, amount, rate, duration):
+            row.add_row(child)
+        return row
 
     def _set(self, effect, key, value):
         self.settings["effects"][effect][key] = value  # the engine reads this live

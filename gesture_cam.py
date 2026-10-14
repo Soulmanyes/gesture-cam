@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """Gesture Cam: webcam -> hand gestures -> effects behind you -> virtual camera.
 
-Gestures (hold for a moment):
+Default gestures (hold for a moment):
   thumbs up     -> fireworks
   peace sign    -> confetti
   rock-on / ILY -> hearts
+  thumbs down   -> rain
+  pointing up   -> balloons
+  open palm     -> snow
+  OK sign       -> sparkles
+  shaka         -> bubbles
+  both hands open -> lasers
 
-How much, how often and how long each effect plays is set in the GUI
+Which gesture plays which effect, and how much, how often and how long, is set in the GUI
 (gesture_cam_gui.py) and saved to ~/.config/gesture-cam/settings.json.
 Running this file directly starts the camera without a window, using those settings.
 
@@ -37,7 +43,22 @@ OUTPUT = "/dev/video10"
 WIDTH, HEIGHT, FPS = 1280, 720, 30
 SETTINGS_FILE = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "gesture-cam/settings.json"
 
-GESTURE_EFFECTS = {"Thumb_Up": "fireworks", "Victory": "confetti", "ILoveYou": "hearts"}
+# Every gesture the MediaPipe model knows, with the name shown in the GUI.
+GESTURES = {
+    "Thumb_Up": "👍 Thumbs up",
+    "Thumb_Down": "👎 Thumbs down",
+    "Victory": "✌️ Peace sign",
+    "ILoveYou": "🤟 I love you",
+    "Pointing_Up": "☝️ Pointing up",
+    "Open_Palm": "✋ Open palm",
+    "Closed_Fist": "✊ Fist",
+    # Not in the model: worked out from two hands, or from finger positions (see detect_gestures).
+    "Two_Thumbs_Up": "👍👍 Two thumbs up",
+    "Two_Thumbs_Down": "👎👎 Two thumbs down",
+    "Two_Open_Palms": "🙌 Both hands open",
+    "OK": "👌 OK sign",
+    "Shaka": "🤙 Shaka / call me",
+}
 HOLD_FRAMES = 5        # consecutive recognitions needed before an effect fires
 GESTURE_EVERY = 2      # run the gesture model on every Nth frame (15/s is plenty)
 MIN_SCORE = 0.6
@@ -47,12 +68,19 @@ TRAIL_DECAY = 0.72     # how much of last frame's sparks stays, for firework str
 GRAVITY = 260.0        # px/s^2, in effect-layer pixels
 MAX_PARTICLES = 30000  # beyond this new bursts are skipped, to keep the frame rate up
 SPARK_KERNEL = np.ones((3, 3), np.uint8)
+SNOW_KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (4, 4))
 
 # Per effect: what the "amount" slider means and its range, plus the defaults.
 EFFECTS = {
-    "fireworks": {"gesture": "👍 Thumbs up", "amount_label": "Rockets per burst", "amount_range": (1, 20)},
-    "confetti": {"gesture": "✌️ Peace sign", "amount_label": "Pieces per burst", "amount_range": (20, 600)},
-    "hearts": {"gesture": "🤟 I love you", "amount_label": "Hearts per burst", "amount_range": (5, 100)},
+    "fireworks": {"amount_label": "Rockets per burst", "amount_range": (1, 20)},
+    "confetti": {"amount_label": "Pieces per burst", "amount_range": (20, 600)},
+    "hearts": {"amount_label": "Hearts per burst", "amount_range": (5, 100)},
+    "rain": {"amount_label": "Raindrops per burst", "amount_range": (10, 400)},
+    "balloons": {"amount_label": "Balloons per burst", "amount_range": (1, 40)},
+    "snow": {"amount_label": "Snowflakes per burst", "amount_range": (10, 400)},
+    "sparkles": {"amount_label": "Sparkles per burst", "amount_range": (5, 150)},
+    "bubbles": {"amount_label": "Bubbles per burst", "amount_range": (2, 80)},
+    "lasers": {"amount_label": "Beams per burst", "amount_range": (1, 12)},
 }
 RATE_RANGE = (0.2, 8.0)       # bursts per second
 DURATION_RANGE = (0.5, 20.0)  # seconds
@@ -60,9 +88,24 @@ DURATION_RANGE = (0.5, 20.0)  # seconds
 DEFAULT_SETTINGS = {
     "camera": "/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920-video-index0",
     "effects": {
-        "fireworks": {"enabled": True, "while_held": True, "amount": 4, "rate": 3.0, "duration": 3.0},
-        "confetti": {"enabled": True, "while_held": False, "amount": 220, "rate": 1.0, "duration": 1.0},
-        "hearts": {"enabled": True, "while_held": False, "amount": 28, "rate": 1.0, "duration": 1.0},
+        "fireworks": {"gesture": "Thumb_Up", "enabled": True, "while_held": True,
+                      "amount": 4, "rate": 3.0, "duration": 3.0},
+        "confetti": {"gesture": "Victory", "enabled": True, "while_held": False,
+                     "amount": 220, "rate": 1.0, "duration": 1.0},
+        "hearts": {"gesture": "ILoveYou", "enabled": True, "while_held": False,
+                   "amount": 28, "rate": 1.0, "duration": 1.0},
+        "rain": {"gesture": "Thumb_Down", "enabled": True, "while_held": True,
+                 "amount": 60, "rate": 6.0, "duration": 3.0},
+        "balloons": {"gesture": "Pointing_Up", "enabled": True, "while_held": False,
+                     "amount": 6, "rate": 1.5, "duration": 2.0},
+        "snow": {"gesture": "Open_Palm", "enabled": True, "while_held": False,
+                 "amount": 80, "rate": 2.0, "duration": 4.0},
+        "sparkles": {"gesture": "OK", "enabled": True, "while_held": False,
+                     "amount": 30, "rate": 4.0, "duration": 2.0},
+        "bubbles": {"gesture": "Shaka", "enabled": True, "while_held": False,
+                    "amount": 12, "rate": 2.0, "duration": 3.0},
+        "lasers": {"gesture": "Two_Open_Palms", "enabled": True, "while_held": True,
+                   "amount": 4, "rate": 1.0, "duration": 3.0},
     },
 }
 
@@ -82,6 +125,8 @@ def load_settings():
     for name, cfg in saved.get("effects", {}).items():
         if name in settings["effects"] and isinstance(cfg, dict):
             settings["effects"][name].update(cfg)
+            if cfg.get("gesture") not in GESTURES:
+                settings["effects"][name]["gesture"] = DEFAULT_SETTINGS["effects"][name]["gesture"]
     return settings
 
 
@@ -102,11 +147,21 @@ def list_cameras():
     return cams
 
 
+# Particle kinds. Each row is: x y vx vy life max_life r g b size kind
+ROCKET, SPARK, CONFETTI, HEART, RAIN, BALLOON, SNOW, SPARKLE, BUBBLE, LASER = range(10)
+# Per kind:              rocket spark confetti heart  rain balloon snow sparkle bubble laser
+KIND_GRAVITY = np.array([0.35,  0.6,  0.15,   -0.05, 1.0, -0.03,  0.0, 0.0,   -0.02, 0.0], np.float32) * GRAVITY
+KIND_DRAG = np.array([1.0,      0.985, 0.97,   1.0,   1.0, 1.0,    1.0, 1.0,   1.0,   1.0], np.float32)
+KIND_SWAY = np.array([0,        0,    40,     40,    0,   25,     30,  0,     20,    0], np.float32)  # px/s
+TRAIL_KINDS = (ROCKET, SPARK, LASER)  # drawn into the fading buffer, so they leave streaks
+
+
 class Particles:
-    """Small numpy particle system. Kinds: 0 rocket, 1 spark, 2 confetti, 3 heart."""
+    """Small numpy particle system; see the kind constants above.
+    Lasers don't move: x is where the beam starts, `size` its middle angle, vx its sweep speed."""
 
     def __init__(self):
-        self.p = np.zeros((0, 11), np.float32)  # x y vx vy life max_life r g b size kind
+        self.p = np.zeros((0, 11), np.float32)
 
     def add(self, rows):
         if rows:
@@ -124,52 +179,71 @@ class Particles:
         if not len(p):
             return
         kind = p[:, 10]
-        grav = np.where(kind == 1, GRAVITY * 0.6,
-               np.where(kind == 0, GRAVITY * 0.35,
-               np.where(kind == 2, GRAVITY * 0.15, -GRAVITY * 0.05)))
-        p[:, 3] += grav * dt
-        drag = np.where(kind == 1, 0.985, np.where(kind == 2, 0.97, 1.0))
-        p[:, 2:4] *= drag[:, None] ** (dt * 60)
-        # confetti and hearts sway sideways
-        sway = (kind >= 2) * np.sin(p[:, 4] * 4 + p[:, 0] * 0.05) * 40
-        p[:, 0] += (p[:, 2] + sway) * dt
-        p[:, 1] += p[:, 3] * dt
+        k = kind.astype(np.intp)
+        moving = kind != LASER
+        p[:, 3] += KIND_GRAVITY[k] * dt
+        p[:, 2:4] *= KIND_DRAG[k, None] ** (dt * 60)
+        # confetti, hearts, balloons, snow and bubbles sway sideways
+        sway = KIND_SWAY[k] * np.sin(p[:, 4] * 4 + p[:, 0] * 0.05)
+        p[:, 0] += np.where(moving, p[:, 2] + sway, 0) * dt
+        p[:, 1] += np.where(moving, p[:, 3], 0) * dt
         p[:, 4] -= dt
 
         # rockets burst when they stop rising or run out of fuel
-        burst = (kind == 0) & ((p[:, 3] > -20) | (p[:, 4] <= 0))
+        burst = (kind == ROCKET) & ((p[:, 3] > -20) | (p[:, 4] <= 0))
         for x, y, *_rest, r, g, b, _s, _k in p[burst]:
             self.add_array(spark_burst(x, y, (r, g, b)))
         p = self.p[: len(p)]  # sparks were appended after the existing rows
-        keep = ~burst & (p[:, 4] > 0) & (p[:, 1] < h + 40) & (p[:, 1] > -h)
+        # drop what has fallen out of the bottom; things rising from below the frame stay
+        keep = ~burst & (p[:, 4] > 0) & ((p[:, 1] < h + 40) | (p[:, 3] < 0)) & (p[:, 1] > -h)
         self.p = np.vstack([p[keep], self.p[len(p):]])
 
-    def draw(self, color, alpha, sparks):
-        """Draw either the rockets/sparks (sparks=True) or the confetti/hearts."""
-        if sparks:
-            self._draw_sparks(color, alpha)
-            return
-        for x, y, _vx, _vy, life, max_life, r, g, b, size, kind in self.p:
-            if kind <= 1:
-                continue
+    def draw(self, color, alpha, trails):
+        """Draw the kinds that leave streaks (trails=True) or all the others."""
+        kind = self.p[:, 10]
+        if trails:
+            self._draw_dots(color, alpha, (kind == ROCKET) | (kind == SPARK), SPARK_KERNEL, 0.9)
+        else:
+            self._draw_dots(color, alpha, kind == SNOW, SNOW_KERNEL, 1.2)
+        # the rest one by one; rockets, sparks and snow were drawn above, all at once
+        one_by_one = (np.isin(kind, TRAIL_KINDS) == trails) & ~np.isin(kind, (ROCKET, SPARK, SNOW))
+        for x, y, vx, vy, life, max_life, r, g, b, size, kind in self.p[one_by_one]:
             fade = min(1.0, life / max(max_life * 0.4, 1e-3))
             c = (int(r * fade), int(g * fade), int(b * fade))
             a = int(255 * fade)
             cx, cy = int(x), int(y)
-            if kind == 2:
+            if kind == CONFETTI:
                 ang = life * 6 + x
                 dx, dy = math.cos(ang) * size, abs(math.sin(ang * 1.3)) * size * 0.6 + 1
                 pts = np.array([[cx - dx, cy - dy], [cx + dx, cy - dy],
                                 [cx + dx, cy + dy], [cx - dx, cy + dy]], np.int32)
                 cv2.fillConvexPoly(color, pts, c, cv2.LINE_AA)
                 cv2.fillConvexPoly(alpha, pts, a, cv2.LINE_AA)
-            else:
+            elif kind == HEART:
                 draw_heart(color, alpha, cx, cy, size, c, a)
+            elif kind == RAIN:
+                # a streak pointing back along the drop's motion
+                tail = (int(x - vx * 0.04), int(y - vy * 0.04))
+                cv2.line(color, (cx, cy), tail, c, 1, cv2.LINE_AA)
+                cv2.line(alpha, (cx, cy), tail, int(a * 0.8), 1, cv2.LINE_AA)
+            elif kind == BALLOON:
+                draw_balloon(color, alpha, cx, cy, size, c, a, life)
+            elif kind == SPARKLE:
+                # grows then shrinks over its life, like a twinkle
+                tw = math.sin(math.pi * (1 - life / max_life))
+                draw_sparkle(color, alpha, cx, cy, size * tw, (int(r * tw), int(g * tw), int(b * tw)), int(255 * tw))
+            elif kind == BUBBLE:
+                draw_bubble(color, alpha, cx, cy, size, c, a)
+            elif kind == LASER:
+                ang = size + 0.55 * math.sin(life * vx)
+                length = 2 * alpha.shape[0]
+                end = (int(x + math.cos(ang) * length), int(y + math.sin(ang) * length))
+                cv2.line(color, (cx, cy), end, c, 2, cv2.LINE_AA)
+                cv2.line(alpha, (cx, cy), end, a, 2, cv2.LINE_AA)
 
-
-    def _draw_sparks(self, color, alpha):
-        """Rockets and sparks, all at once with numpy: there can be tens of thousands."""
-        p = self.p[self.p[:, 10] <= 1]
+    def _draw_dots(self, color, alpha, select, kernel, blur):
+        """Round dots for many particles at once with numpy: there can be tens of thousands."""
+        p = self.p[select]
         h, w = alpha.shape
         x, y = p[:, 0].astype(np.int32), p[:, 1].astype(np.int32)
         inside = (x >= 0) & (x < w) & (y >= 0) & (y < h)
@@ -183,10 +257,30 @@ class Particles:
         dots_c[y[order], x[order]] = (p[order, 6:9] * fade[order, None]).astype(np.uint8)
         dots_a[y[order], x[order]] = (255 * fade[order]).astype(np.uint8)
         # Grow each dot into a small round spark: widen, then soften the square edges.
-        dots_c = cv2.GaussianBlur(cv2.dilate(dots_c, SPARK_KERNEL), (5, 5), 0.9)
-        dots_a = cv2.GaussianBlur(cv2.dilate(dots_a, SPARK_KERNEL), (5, 5), 0.9)
+        dots_c = cv2.GaussianBlur(cv2.dilate(dots_c, kernel), (5, 5), blur)
+        dots_a = cv2.GaussianBlur(cv2.dilate(dots_a, kernel), (5, 5), blur)
         cv2.max(color, cv2.multiply(dots_c, 2), dst=color)  # x2 keeps the blurred cores bright
         cv2.max(alpha, cv2.multiply(dots_a, 2), dst=alpha)
+
+
+def draw_sparkle(color, alpha, cx, cy, s, c, a):
+    """Four-pointed star."""
+    s = max(1.0, s)
+    long, short = s, s * 0.22
+    pts = np.array([[cx, cy - long], [cx + short, cy - short], [cx + long, cy], [cx + short, cy + short],
+                    [cx, cy + long], [cx - short, cy + short], [cx - long, cy], [cx - short, cy - short]], np.int32)
+    for img, col in ((color, c), (alpha, a)):
+        cv2.fillPoly(img, [pts], col, cv2.LINE_AA)
+
+
+def draw_bubble(color, alpha, cx, cy, s, c, a):
+    s = max(3, int(s))
+    rim_a = int(a * 0.75)
+    shine = (cx - s // 3, cy - s // 3)
+    for img, col, sh in ((color, tuple(int(v * 0.75) for v in c), tuple(int(a * 0.9) for _ in range(3))),
+                         (alpha, rim_a, a)):
+        cv2.circle(img, (cx, cy), s, col, 1, cv2.LINE_AA)
+        cv2.ellipse(img, shine, (max(1, s // 4), max(1, s // 6)), -40, 0, 360, sh, -1, cv2.LINE_AA)
 
 
 def draw_heart(color, alpha, cx, cy, s, c, a):
@@ -197,6 +291,23 @@ def draw_heart(color, alpha, cx, cy, s, c, a):
         cv2.circle(img, (cx - lobe, cy), lobe, col, -1, cv2.LINE_AA)
         cv2.circle(img, (cx + lobe, cy), lobe, col, -1, cv2.LINE_AA)
         cv2.fillConvexPoly(img, tri, col, cv2.LINE_AA)
+
+
+def draw_balloon(color, alpha, cx, cy, s, c, a, life):
+    s = max(4, int(s))
+    axes = (s, int(s * 1.2))
+    bottom = cy + axes[1]
+    # wavy string first, so the balloon covers its top end
+    string = np.array([[cx + int(3 * math.sin(life * 3 + i)), bottom + i * s // 3] for i in range(7)], np.int32)
+    knot = np.array([[cx, bottom - 1], [cx - 3, bottom + 4], [cx + 3, bottom + 4]], np.int32)
+    shine = (cx - s // 3, cy - s // 2)
+    grey = tuple(int(v * a / 255) for v in (200, 200, 200))
+    for img, col, str_col, shine_col in ((color, c, grey, tuple(int(a * 0.9) for _ in range(3))),
+                                         (alpha, a, int(a * 0.7), a)):
+        cv2.polylines(img, [string], False, str_col, 1, cv2.LINE_AA)
+        cv2.fillConvexPoly(img, knot, col, cv2.LINE_AA)
+        cv2.ellipse(img, (cx, cy), axes, 0, 0, 360, col, -1, cv2.LINE_AA)
+        cv2.ellipse(img, shine, (max(1, s // 5), max(2, s // 3)), 30, 0, 360, shine_col, -1, cv2.LINE_AA)
 
 
 def spark_burst(x, y, rgb):
@@ -212,7 +323,7 @@ def spark_burst(x, y, rgb):
     out[:, 4] = out[:, 5] = life
     out[:, 6:9] = col
     out[:, 9] = np.random.uniform(2.5, 4.0, n)
-    out[:, 10] = 1
+    out[:, 10] = SPARK
     return out
 
 
@@ -224,21 +335,94 @@ def spawn(effect, w, h, amount):
             x = random.uniform(0.05, 0.95) * w
             fuel = random.uniform(1.0, 1.5)
             rows.append([x, h + random.uniform(10, 40), random.uniform(-25, 25),
-                         -random.uniform(0.7, 1.0) * h * 0.95, fuel, fuel, *random.choice(PALETTE), 2.5, 0])
+                         -random.uniform(0.7, 1.0) * h * 0.95, fuel, fuel, *random.choice(PALETTE), 2.5, ROCKET])
     elif effect == "confetti":
         for _ in range(amount):
             life = random.uniform(3.0, 5.0)
             rows.append([random.uniform(0, w), random.uniform(-h * 0.8, 0), random.uniform(-30, 30),
                          random.uniform(40, 120), life, life, *random.choice(PALETTE),
-                         random.uniform(3, 6), 2])
+                         random.uniform(3, 6), CONFETTI])
     elif effect == "hearts":
         for _ in range(amount):
             life = random.uniform(3.0, 4.5)
             pink = random.choice([(150, 60, 255), (120, 40, 230), (180, 110, 255)])
             rows.append([random.uniform(0, w), h + random.uniform(10, h * 0.3), random.uniform(-15, 15),
-                         -random.uniform(90, 160), life, life, *pink, random.uniform(8, 16), 3])
+                         -random.uniform(90, 160), life, life, *pink, random.uniform(8, 16), HEART])
+    elif effect == "rain":
+        for _ in range(amount):
+            life = random.uniform(1.5, 2.5)
+            blue = random.choice([(255, 200, 150), (240, 180, 120), (255, 220, 190)])
+            rows.append([random.uniform(-0.1, 1.1) * w, random.uniform(-h * 0.3, 0), random.uniform(-30, -10),
+                         random.uniform(380, 520), life, life, *blue, 1, RAIN])
+    elif effect == "balloons":
+        for _ in range(amount):
+            life = random.uniform(6.0, 8.0)
+            rows.append([random.uniform(0.05, 0.95) * w, h + random.uniform(30, h * 0.4), random.uniform(-10, 10),
+                         -random.uniform(60, 110), life, life, *random.choice(PALETTE[:-1]),
+                         random.uniform(14, 22), BALLOON])
+    elif effect == "snow":
+        for _ in range(amount):
+            life = random.uniform(6.0, 9.0)
+            rows.append([random.uniform(0, w), random.uniform(-h * 0.5, 0), random.uniform(-8, 8),
+                         random.uniform(30, 70), life, life, 245, 240, 235, 1, SNOW])
+    elif effect == "sparkles":
+        for _ in range(amount):
+            life = random.uniform(0.6, 1.3)
+            gold = random.choice([(120, 220, 255), (200, 240, 255), (255, 255, 255), (160, 200, 255)])
+            rows.append([random.uniform(0, w), random.uniform(0, h), 0, 0, life, life, *gold,
+                         random.uniform(4, 11), SPARKLE])
+    elif effect == "bubbles":
+        for _ in range(amount):
+            life = random.uniform(5.0, 8.0)
+            tint = random.choice([(255, 230, 200), (255, 200, 240), (220, 255, 230)])
+            rows.append([random.uniform(0.05, 0.95) * w, h + random.uniform(10, h * 0.3), random.uniform(-10, 10),
+                         -random.uniform(40, 90), life, life, *tint, random.uniform(6, 16), BUBBLE])
+    elif effect == "lasers":
+        for _ in range(amount):
+            life = random.uniform(2.0, 3.0)
+            beam = random.choice([(80, 255, 80), (80, 80, 255), (255, 80, 255), (255, 200, 60)])
+            # starts at the bottom edge, points up, sweeps side to side (see Particles)
+            rows.append([random.uniform(0.1, 0.9) * w, h - 1, random.uniform(1.5, 3.0) * random.choice((-1, 1)),
+                         0, life, life, *beam, -math.pi / 2 + random.uniform(-0.4, 0.4), LASER])
     return rows
 
+
+def _hand_shape(landmarks, aspect):
+    """Which fingers are stretched out, from the 21 hand landmarks (MediaPipe numbering)."""
+    pts = np.array([[lm.x * aspect, lm.y] for lm in landmarks])
+    dist = lambda i, j: float(np.linalg.norm(pts[i] - pts[j]))  # noqa: E731
+    size = dist(0, 9)  # wrist to middle knuckle
+    out = {name: dist(tip, 0) > dist(pip, 0) * 1.15
+           for name, tip, pip in (("index", 8, 6), ("middle", 12, 10), ("ring", 16, 14), ("pinky", 20, 18))}
+    # thumb out: its tip is well away from the pinky knuckle and from the index knuckle
+    out["thumb"] = dist(4, 17) > 0.9 * size and dist(4, 5) > 0.4 * size
+    out["pinch"] = dist(4, 8) < 0.35 * size  # thumb tip touching index tip
+    return out
+
+
+def detect_gestures(res, aspect):
+    """Gesture names in this frame, most specific first: two-hand gestures, then the
+    OK/shaka shapes worked out from landmarks, then the model's own label for each hand."""
+    labels = [hand[0].category_name if hand and hand[0].score >= MIN_SCORE else "None" for hand in res.gestures]
+    found = []
+    if labels.count("Thumb_Up") == 2:
+        found.append("Two_Thumbs_Up")
+    if labels.count("Thumb_Down") == 2:
+        found.append("Two_Thumbs_Down")
+    if labels.count("Open_Palm") == 2:
+        found.append("Two_Open_Palms")
+    for label, landmarks in zip(labels, res.hand_landmarks):
+        # The model has no OK or shaka; it calls them nothing, or mistakes a shaka for
+        # "I love you". The finger rules are strict, so when they match they win.
+        if label not in ("None", "ILoveYou"):
+            continue
+        f = _hand_shape(landmarks, aspect)
+        if f["pinch"] and f["middle"] and f["ring"] and f["pinky"]:
+            found.append("OK")
+        elif f["thumb"] and f["pinky"] and not (f["index"] or f["middle"] or f["ring"]):
+            found.append("Shaka")
+    found += [label for label in labels if label != "None"]
+    return found
 
 class CameraError(Exception):
     pass
@@ -394,16 +578,16 @@ class Engine:
                 frame_no += 1
                 if frame_no % GESTURE_EVERY == 0:
                     res = recognizer.recognize_for_video(mp_img, ts)
-                    seen = None
-                    for hand in res.gestures:
-                        if hand and hand[0].category_name in GESTURE_EFFECTS and hand[0].score >= MIN_SCORE:
-                            seen = hand[0].category_name
-                            break
+                    # Which effects each gesture plays, from the settings (several may share one).
+                    wanted = {}
+                    for effect, cfg in effects_cfg.items():
+                        if cfg["enabled"]:
+                            wanted.setdefault(cfg["gesture"], []).append(effect)
+                    seen = next((gst for gst in detect_gestures(res, fw / fh) if gst in wanted), None)
                     streak = streak + 1 if seen and seen == streak_gesture else (1 if seen else 0)
                     streak_gesture = seen
-                    effect = GESTURE_EFFECTS.get(seen)
-                    cfg = effects_cfg.get(effect)
-                    if cfg and cfg["enabled"]:
+                    for effect in wanted.get(seen, []):
+                        cfg = effects_cfg[effect]
                         if cfg["while_held"]:
                             if streak >= HOLD_FRAMES or now < held_until[effect]:
                                 held_until[effect] = now + HELD_GRACE_S
@@ -434,9 +618,9 @@ class Engine:
                     # Truncate rather than round, so faint pixels actually reach zero.
                     trail_c = (trail_c * TRAIL_DECAY).astype(np.uint8)
                     trail_a = (trail_a * TRAIL_DECAY).astype(np.uint8)
-                    particles.draw(trail_c, trail_a, sparks=True)
+                    particles.draw(trail_c, trail_a, trails=True)
                     color, alpha = trail_c.copy(), trail_a.copy()
-                    particles.draw(color, alpha, sparks=False)
+                    particles.draw(color, alpha, trails=False)
                     # Soft glow around the sparks, blurred at quarter size because it is cheap there.
                     q = (fw // 2, fh // 2)
                     glow = cv2.resize(cv2.GaussianBlur(cv2.resize(color, q), (0, 0), 2), (fw, fh))
