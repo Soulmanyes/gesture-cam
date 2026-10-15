@@ -1,6 +1,8 @@
 #!/bin/sh
 # Start Gesture Cam. Opens the window; with --headless, runs without one using the saved settings.
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
+# The models are downloaded from Google, not shipped; fetch them on first start.
+[ -f models/gesture_recognizer.task ] && [ -f models/selfie_segmenter.tflite ] || ./get-models.sh || exit 1
 if [ "$1" = "--headless" ]; then
     exec .venv/bin/python gesture_cam.py
 fi

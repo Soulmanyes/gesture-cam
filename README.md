@@ -45,8 +45,12 @@ Then create the Python environment and add the app to your launcher:
 ```sh
 python3 -m venv --system-site-packages .venv   # system site-packages provides the GTK bindings
 .venv/bin/pip install -r requirements.txt
+./get-models.sh                                 # downloads MediaPipe's two models from Google
 sed "s#^Exec=.*#Exec=$PWD/gesture-cam#" gesture-cam.desktop > ~/.local/share/applications/gesture-cam.desktop
 ```
+
+The models aren't included in Gesture Cam's download, so `get-models.sh` fetches them from Google
+and checks them. The launcher also runs it if they're missing.
 
 ## Use
 
@@ -92,7 +96,7 @@ pkill -USR2 -f 'python gesture_cam'   # confetti
 - `gesture_cam_gui.py`: the window (GTK 4 / libadwaita).
 - `gesture_cam.py`: the camera and effects engine, also runnable on its own.
 - `gesture-cam`: the launcher script. `gesture-cam.desktop` is the app menu entry.
-- `models/`: MediaPipe models (`gesture_recognizer.task`, `selfie_segmenter.tflite`).
+- `get-models.sh`: downloads the MediaPipe models into `models/` (`gesture_recognizer.task`, `selfie_segmenter.tflite`).
 - `.venv/`: the Python environment (mediapipe, opencv-contrib-python, numpy, pyvirtualcam).
   It also uses the system's GTK bindings (`python-gobject`).
 
@@ -100,3 +104,18 @@ pkill -USR2 -f 'python gesture_cam'   # confetti
 
 `./publish.sh` uploads the committed code as a download on https://szekbal.duckdns.org/apps/gesture-cam/.
 The download page itself is in the Everyday repo, under `deploy/apps/`.
+
+## License
+
+Gesture Cam's own code is released under [CC0 1.0](LICENSE): public domain, no rights reserved.
+
+It doesn't include anyone else's code or models. These are installed separately and keep their own licenses:
+
+| What | License | Installed by |
+|---|---|---|
+| [MediaPipe](https://github.com/google-ai-edge/mediapipe) | Apache 2.0 | `pip install -r requirements.txt` |
+| [OpenCV](https://opencv.org/) (opencv-contrib-python) | Apache 2.0 (its wheels bundle other libraries; see their `LICENSE-3RD-PARTY.txt`) | pip |
+| [NumPy](https://numpy.org/) | BSD 3-Clause and others | pip |
+| [pyvirtualcam](https://github.com/letmaik/pyvirtualcam) | GPL 2.0 | pip |
+| MediaPipe gesture recognizer and selfie segmenter models | Google's terms ([model cards](https://developers.google.com/edge/mediapipe/solutions/vision/gesture_recognizer)) | `get-models.sh`, from Google |
+| GTK 4, libadwaita, PyGObject, GStreamer, v4l2loopback | their own (LGPL / GPL) | `setup.sh`, from your distro |
