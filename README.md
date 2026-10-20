@@ -3,24 +3,30 @@
 Webcam effects for video calls and camera apps, triggered by hand gestures. The effects play behind you:
 the person in the frame is cut out with MediaPipe's selfie segmenter, so they never cover your face.
 
-| Default gesture (hold ~⅓ s) | Effect    |
-|-----------------------------|-----------|
-| 👍 thumbs up                | fireworks |
-| ✌️ peace sign                | confetti  |
-| 🤟 "I love you"             | hearts    |
-| 👎 thumbs down              | rain      |
-| ☝️ pointing up               | balloons  |
-| ✋ open palm                 | snow      |
-| 👌 OK sign                  | sparkles  |
-| 🤙 shaka / call me          | bubbles   |
-| 🙌 both hands open          | lasers    |
+Effects: fireworks, confetti, hearts, rain, balloons, snow, sparkles, bubbles and lasers.
+Hold a gesture for about ⅓ s to play its effect. Which gesture plays which effect is set in the window.
 
-Each effect's gesture can be changed in the window. The choices are the seven gestures MediaPipe's
-model recognises (the ones above plus ✊ fist), and five that Gesture Cam works out itself:
+The gestures to choose from are the seven that MediaPipe's model recognises, and five that Gesture Cam
+works out itself:
 
+- 👍 thumbs up, 👎 thumbs down, ✌️ peace sign, 🤟 "I love you", ☝️ pointing up, ✋ open palm and ✊ fist,
+  from the model.
 - 👍👍 two thumbs up, 👎👎 two thumbs down and 🙌 both hands open, from the model's result for each hand.
 - 👌 OK sign and 🤙 shaka, from the finger positions. These are rule-based, so they can be less
   reliable than the model's own gestures.
+
+## Get it
+
+Download `gesture-cam.tar.gz` from https://szekbal.duckdns.org/apps/gesture-cam/ and unpack it, or clone
+this repository:
+
+```sh
+tar xzf gesture-cam.tar.gz && cd gesture-cam
+# or
+git clone https://github.com/Soulmanyes/gesture-cam.git && cd gesture-cam
+```
+
+Keep the folder where it is after setup: the app menu entry points into it.
 
 ## Setup (once)
 
@@ -65,20 +71,26 @@ Other camera apps (GNOME Snapshot, OBS's PipeWire camera source, browsers) find 
 instead. Gesture Cam offers the same picture there too, also named **Gesture Cam**, while it's on.
 Open the app after turning Gesture Cam on, or reopen it, so it lists the camera.
 
+The picture is 1280×720 at 30 frames per second.
+
 ## Settings
 
-The window has a section for each effect:
+The **Gesture Cam** switch at the top turns the camera on and off; its subtitle shows what it's doing
+or what went wrong. The **Webcam** menu picks which camera to use; changing it restarts the camera.
+
+Below that is a section for each effect:
 
 - **Enabled**: turns the effect on or off.
 - **Gesture**: which hand gesture plays it. Two effects can share a gesture, and then both play.
 - **Keep going while the gesture is held**: the effect plays for as long as you hold the gesture.
   When this is off, the effect plays for **Duration** seconds instead.
-- **Amount**: how many rockets, confetti pieces or hearts each burst has.
+- **Amount**: how much each burst has: rockets, confetti pieces, hearts, raindrops, balloons,
+  snowflakes, sparkles, bubbles or laser beams.
 - **Frequency**: bursts per second while the effect plays.
-- **Test**: plays the effect now, without the gesture.
+- **Duration**: how long the effect plays, when it doesn't keep going while held.
+- **Test**: plays the effect now, without the gesture. It works while the camera is on.
 
-The **Webcam** menu picks which camera to use. Changes apply immediately and are saved to
-`~/.config/gesture-cam/settings.json`.
+Changes apply immediately and are saved to `~/.config/gesture-cam/settings.json`.
 
 ## Without the window
 
@@ -90,6 +102,12 @@ Effects can also be fired from a hotkey, in either mode:
 pkill -USR1 -f 'python gesture_cam'   # fireworks
 pkill -USR2 -f 'python gesture_cam'   # confetti
 ```
+
+## Updating
+
+Download and unpack the new `gesture-cam.tar.gz` over the old folder (or `git pull`), then run
+`.venv/bin/pip install -r requirements.txt` again in case the Python packages changed.
+Your settings stay in `~/.config/gesture-cam/`.
 
 ## Files
 
