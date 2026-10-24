@@ -15,46 +15,40 @@ works out itself:
 - 👌 OK sign and 🤙 shaka, from the finger positions. These are rule-based, so they can be less
   reliable than the model's own gestures.
 
-## Get it
-
-Download `gesture-cam.tar.gz` from https://szekbal.duckdns.org/apps/gesture-cam/ and unpack it, or clone
-this repository:
-
-```sh
-tar xzf gesture-cam.tar.gz && cd gesture-cam
-# or
-git clone https://github.com/Soulmanyes/gesture-cam.git && cd gesture-cam
-```
-
-Keep the folder where it is after setup: the app menu entry points into it.
-
-## Setup (once)
+## Install
 
 Works on Arch (and Arch-based distros such as CachyOS, EndeavourOS, Manjaro), Debian 13+, Ubuntu 24.04+
 and Fedora 40+. Older releases have a libadwaita or GLib that's too old for the window.
 
 ```sh
-sudo ./setup.sh
+curl -fsSL https://raw.githubusercontent.com/Soulmanyes/gesture-cam/main/install.sh | sh
 ```
 
-This installs the window's libraries (GTK 4, libadwaita, PyGObject), GStreamer's PipeWire plugin and
-v4l2loopback, then creates the
-virtual camera `/dev/video10`, named "Gesture Cam". It also adds config so the camera comes back after
-every reboot. On Fedora it enables the RPM Fusion (free) repository, which is where v4l2loopback comes from.
-
-With Secure Boot on, the driver is blocked until its signing key is enrolled. The script then prints the
-`mokutil --import` command to run; after a reboot, pick "Enroll MOK" on the blue screen, then run
-`sudo ./setup.sh` again.
-
-Then create the Python environment and add the app to your launcher:
+This puts the app in `~/.local/share/gesture-cam`. To keep it somewhere else, download
+`gesture-cam.tar.gz` from https://szekbal.duckdns.org/apps/gesture-cam/ and unpack it, or clone this
+repository, then run `install.sh` from that folder:
 
 ```sh
-python3 -m venv --system-site-packages .venv   # system site-packages provides the GTK bindings
-.venv/bin/pip install -r requirements.txt
-./get-models.sh                                 # downloads MediaPipe's two models from Google
-sed "s#^Exec=.*#Exec=$PWD/gesture-cam#" gesture-cam.desktop > ~/.local/share/applications/gesture-cam.desktop
+tar xzf gesture-cam.tar.gz && cd gesture-cam
+# or
+git clone https://github.com/Soulmanyes/gesture-cam.git && cd gesture-cam
+./install.sh
 ```
 
+Keep the folder where it is after installing: the app menu entry points into it.
+
+The first time, `install.sh` asks for your password and runs `setup.sh` as root. That installs the
+window's libraries (GTK 4, libadwaita, PyGObject), GStreamer's PipeWire plugin and v4l2loopback, then
+creates the virtual camera `/dev/video10`, named "Gesture Cam". It also adds config so the camera comes
+back after every reboot. On Fedora it enables the RPM Fusion (free) repository, which is where
+v4l2loopback comes from. Once the camera exists, later runs skip this step.
+
+With Secure Boot on, the driver is blocked until its signing key is enrolled. The script then prints the
+`mokutil --import` command to run; after a reboot, pick "Enroll MOK" on the blue screen, then run the
+install command again.
+
+Then `install.sh` creates the Python environment in `.venv`, installs its packages, downloads
+MediaPipe's two models from Google with `get-models.sh` and adds Gesture Cam to your app menu.
 The models aren't included in Gesture Cam's download, so `get-models.sh` fetches them from Google
 and checks them. The launcher also runs it if they're missing.
 
@@ -105,8 +99,8 @@ pkill -USR2 -f 'python gesture_cam'   # confetti
 
 ## Updating
 
-Download and unpack the new `gesture-cam.tar.gz` over the old folder (or `git pull`), then run
-`.venv/bin/pip install -r requirements.txt` again in case the Python packages changed.
+Run the install command again. If you installed from the download or a clone, unpack the new
+`gesture-cam.tar.gz` over the old folder (or `git pull`) and run `./install.sh` again.
 Your settings stay in `~/.config/gesture-cam/`.
 
 ## Files
@@ -114,6 +108,7 @@ Your settings stay in `~/.config/gesture-cam/`.
 - `gesture_cam_gui.py`: the window (GTK 4 / libadwaita).
 - `gesture_cam.py`: the camera and effects engine, also runnable on its own.
 - `gesture-cam`: the launcher script. `gesture-cam.desktop` is the app menu entry.
+- `install.sh`: installs or updates the app for your user. `setup.sh` is its one-time root part.
 - `get-models.sh`: downloads the MediaPipe models into `models/` (`gesture_recognizer.task`, `selfie_segmenter.tflite`).
 - `.venv/`: the Python environment (mediapipe, opencv-contrib-python, numpy, pyvirtualcam).
   It also uses the system's GTK bindings (`python-gobject`).
