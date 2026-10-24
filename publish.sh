@@ -10,7 +10,7 @@ fi
 
 # License check: only our own (CC0) files may ship. Third-party code and the MediaPipe models are
 # installed separately (pip, get-models.sh, setup.sh), never put in the download.
-ours='^(\.gitignore|LICENSE|README\.md|requirements\.txt|gesture-cam(\.desktop)?|gesture_cam(_gui)?\.py|(get-models|install|publish|setup)\.sh)$'
+ours='^(\.gitignore|LICENSE|README\.md|docs/screenshot\.png|requirements\.txt|gesture-cam(\.desktop)?|gesture_cam(_gui)?\.py|(get-models|install|publish|setup)\.sh)$'
 if git ls-files | grep -qvE "$ours"; then
     echo "These tracked files aren't on publish.sh's list. Check their license, then add them:" >&2
     git ls-files | grep -vE "$ours" >&2

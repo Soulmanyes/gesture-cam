@@ -15,6 +15,8 @@ works out itself:
 - 👌 OK sign and 🤙 shaka, from the finger positions. These are rule-based, so they can be less
   reliable than the model's own gestures.
 
+![Gesture Cam's window: the camera switch, the webcam and the effects with their gestures](docs/screenshot.png)
+
 ## Install
 
 Works on Arch (and Arch-based distros such as CachyOS, EndeavourOS, Manjaro), Debian 13+, Ubuntu 24.04+
